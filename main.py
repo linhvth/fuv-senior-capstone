@@ -11,6 +11,14 @@ import numpy as np
 import math
 from numpy.linalg import norm
 
+from sgd import *
+from data_generation import *
+from models import *
+
+
+### LogReg Test => move to test
+
+
 ### Test 1: Simple convex functions
 f = lambda x: x**2
 df = lambda x: 2*x
