@@ -129,7 +129,7 @@ class SGD:
             
             # Average gradients across streams
             update_vector /= self.n_streams  
-            final_theta = self._update(final_theta, update_vector)
+            final_theta = self._sgd_update(final_theta, update_vector)
 
         self.theta = final_theta
                        
