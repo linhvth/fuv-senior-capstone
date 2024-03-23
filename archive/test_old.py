@@ -2,8 +2,8 @@
 Test SGD implementation with Logistic Regression and Iris dataset.
 """
 
-from models import *
-from sgd import *
+from archive.logreg_old import *
+from old import *
 
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split    
