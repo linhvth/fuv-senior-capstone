@@ -13,7 +13,7 @@ Author: Linh Vu (2024)
 """
 
 import numpy as np
-from sgd import *
+from SGD import *
 
 class LogisticRegression:
     """

@@ -6,149 +6,98 @@ Linh Vu (2024)
 
 ### IMPORT LIBRARIES
 import numpy as np
+
 class SGD:
-    """
-    Base class for Stochastic Gradient Descent (SGD) optimizers.
-
-    This class provides a framework for performing SGD updates on model parameters
-    based on a learning rate and gradient information. Subclasses can implement
-    pecific update rules like standard SGD and noisy SGD.
-    """
     def __init__(self):
-        self.theta = None
-        self.init_theta = None
-        self.n_params = None
-        self.df = None
+        """
+        Stochastic Gradient Descent optimizer.
+        """
         self.f = None
-        self.X = None
-        self.y = None
+        self.df = None
+        self.n_dims = None
         self.step_size = None
-        self.n_iters = None
-        self.n_streams = None
-        self.update_method = None
-        self.strategy = None
-        pass
+        self.max_iter=None
+        self.epsilon = None
+        self.tolerance = None
+        self.max_iter = None
+        self.init_x = None
+        self.x = None
+    
+    def _update(self, curr_x, stochastic_vec):
+        """
+        Performs a single update step of the SGD algorithm.
+        """
+        df_prev_x = self.df(curr_x)
+        self.x -= self.stepsize * (df_prev_x + stochastic_vec)
 
-    def get_theta(self):
+    def optimize(self, f, df, n_dims, init_point=None, step_size=1e-2, 
+                 max_iter=1000, max_stream=100, epsilon=1e-2, tolerance=1e-4):
         """
-        Returns the optimal parameters (weights and bias) found by the optimizer.
-        Returns:
-            A NumPy array containing the optimal parameters.
-        """
-        return self.theta
-
-    def fit(self, f, df, init_theta=None, M=None, y=None, n_iters=1000, n_streams=100, 
-            step_size=0.01, update_method='avgLastPoint'):
-        """
-        Fits the model using SGD optimization.
+        Optimizes the function using SGD for a maximum number of iterations.
 
         Args:
-            f: The objective function to be minimized.
-            df: The gradient function of the objective function.
-            X: A 2D NumPy array containing the training data features.
-            y: A 1D NumPy array containing the target labels.
-            init_theta: A NumPy array containing initial parameters (weights) 
-                        (default: None - random initialization).
-            n_iter: An integer specifying the number of training iterations 
-                    (default: 1000).
-            n_streams: An integer specifying the number of data streams for potential 
-                        parallelization (default: 1).
-            update_method: A string specifying the update method (default: 'standard_sgd').
-            
-        Returns:
-            None
-        """
-        # Record step_size value
-        self.step_size = step_size
-        
-        # Check for valid data shapes
-        if (M is not None) and (y is not None):
-            if len(M.shape) != 2 or len(y.shape) != 1 or M.shape[0] != y.shape[0]:
-                raise ValueError("Incompatible data shapes for M and y")
-            self.M = M
-            self.y = y
-            self.n_params = M.shape[1]
-        
-        # Initialize theta (params) random initialization)
-        if init_theta is None:
-            self.init_theta = np.random.rand(self.n_params)
-        else:
-            self.init_theta = init_theta
+            f: The function to optimize (objective function).
+            df: The gradient function of f.
+            n_dims: The dimensionality of the input.
+            init_point: The initial guess for the optimal point (default: None, random initialization).
+            step_size: The learning rate for gradient updates (default: 1e-2).
+            max_iter: The maximum number of iterations to perform (default: 1000).
+            epsilon: neighborhood
+            tolerance: The convergence tolerance (default: 1e-4).
 
-        # Import information of main function and its derivative
+        Returns:
+        The optimal point found by SGD.
+        """
+        ### Setup class's params
         self.f = f
         self.df = df
+        self.n_dims = n_dims
+        self.init_x = init_point if init_point is not None else np.random.rand(self.n_dims)
+        self.step_size = step_size
+        self.max_iter = max_iter
+        self.epsilon = epsilon
+        self.tolerance = tolerance
+        self.n_streams = max_stream
 
-        # Import other args of optimization process
-        self.n_iters = n_iters
-        self.n_streams = n_streams
-
-        # Optimization process - pick either avgLastPoint or avgEachIter
-        # Choose optimization strategy based on update_method
-        if update_method == 'avgEachIter':
-            self.optimize = self._avg_each_iter
-        elif update_method == 'avgLastPoint':
-            self.optimize = self._avg_last_point
-        else:
-            raise ValueError("Invalid update_method. Choose 'avgEachIter' or 'avgLastPoint'")
         
-        # Perform SGD optimization
-        self.optimize()
-
-    def _sgd_update(self, theta, update_vector):
-        """
-        Updates parameters based on the learning rate and gradients.
-
-        Args:
-            params: A NumPy array containing model parameters (weights and bias).
-            grad: A NumPy array containing gradients for each parameter.
-
-        Returns:
-            A NumPy array containing the updated parameters.
-        """
-        return theta - self.step_size*update_vector
+        ### Performs SGD update in each stream, then take the average of all final x values 
+        ### obtained from whose streams.
+        record_last_thetas = np.zeros((self.n_streams, self.n_params))
+        for i in range(self.n_streams):
+            x = self.init_x.copy()
+            for _ in range(self.max_iter):
+                # Get a random vector
+                noise = self._gaussian_noise()
+                # Update theta
+                x = self._update(x, noise)
+                if np.linalg.norm(self.df(x)) < self.tolerance:
+                    break
+            # Store values of lasts point of each stream
+            record_last_thetas[i] = x
+        
+        # Average the last thetas of all streams to obtain the final 'optimal' theta
+        self.x = np.mean(record_last_thetas, axis=0)
+        
+    def get_solution(self):
+        return self.x
     
-    def _uniform_select_sample(self):
-        # Randomly select a data point index
-        index = np.random.randint(self.M.shape[0])
-        # Return random pair (point)
-        return self.M[index, :], self.y[index]
-
-    def _avg_each_iter(self):
-        """
-        Performs SGD with update averaged across gradients from each stream 
-        at every iteration.
-        """
-        final_theta = self.init_theta.copy()
-        for _ in range(self.n_iters):
-            update_vector = np.zeros_like(final_theta)
-            for _ in range(self.n_streams):
-                # Get random data point and its label
-                m_i, y_i = self._uniform_select_sample()
-                update_vector += self.df(m_i, y_i, final_theta)
-            
-            # Average gradients across streams
-            update_vector /= self.n_streams  
-            final_theta = self._sgd_update(final_theta, update_vector)
-
-        self.theta = final_theta
+    def _gaussian_noise(self):
+        return np.random.normal(loc=0, scale=self.epsilon, size=self.n_dims)
                        
     def _avg_last_point(self):
         """
         Performs SGD with update averaged across final theta values from each stream.
         """
         record_last_thetas = np.zeros((self.n_streams, self.n_params))
-
         for i in range(self.n_streams):
-            theta = self.init_theta.copy()
-            for _ in range(self.n_iters):
+            x = self.init_x.copy()
+            for _ in range(self.max_iter):
                 # Get a random vector
-                m_i, y_i = self._uniform_select_sample()
-                this_grad = self.df(m_i, y_i, theta)
-
-                # update theta
-                theta = self._sgd_update(theta, this_grad)
-            record_last_thetas[i] = theta
+                noise = self._gaussian_noise()
+                # Update theta
+                x = self._update(x, noise)
+            # Store values of lasts point of each stream
+            record_last_thetas[i] = x
         
         # Average the last thetas of all streams to obtain the final 'optimal' theta
-        self.theta = np.mean(record_last_thetas, axis=0)
+        self.x = np.mean(record_last_thetas, axis=0)
