@@ -12,36 +12,22 @@ import math
 from numpy.linalg import norm
 
 from SGD import *
-from data_generation import *
-
-
-### LogReg Test => move to test
-
-
-### Test 1: Simple convex functions
-def square_function():
-  f = lambda x: (x-2)**2
-  df = lambda x: 2*(x-2)
-  return f, df
-
-### Test 2: Non-convex functions
-def rosenbrock(X):
-  """
-  Rosenbrock function: 
-    f(x) = sum((a_i - x[i-1])^2) for i = 1 to n-1, a = [1, 1.2, ..., n]
-  """
-  return
-
-
-### Test 3: Perceptron
+from misc.data_generation import *
+from misc.testing import testing_opt
+from misc.functions import *
 
 ### Perform tests
 if __name__ == '__main__':
-  f, df = square_function()
-  optimizer = SGD()
-  optimizer.optimize(f, df, n_dims=1, step_size=1e-2, max_iter=1000, 
-                     max_stream=100, epsilon=1e-5, tolerance=1e-2)
-  print(optimizer.get_last_points())
-  print(optimizer.get_solution())
+  f, df = sphere_function()
+  testing_opt(f, df, n_dims=3, true_global_min= np.array(([0, 0, 0])))
+
+  # Test Himmelblau function (medium complexity non-convex)
+  # f, df = modified_schwefel()
+  # testing_opt(f, df, n_dims=1, init_point=None, step_size=1e-2, max_iter=1000, 
+  #               max_stream=300, epsilon=1e-2, tolerance=1e-20)
+  
+  # Test with the 2-dim Rosenbrock function
+  # f, df = rosenbrock_2d()
+  # testing_opt(f, df, n_dims=2, init_point=np.array([4, -5]), step_size=1e-3)
 
   """Comment: both epsilon and tolerance affect to the solution obtain by SGD"""
