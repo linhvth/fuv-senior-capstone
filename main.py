@@ -12,14 +12,11 @@ import math
 from numpy.linalg import norm
 
 from SGD import *
-from misc.data_generation import *
-from misc.testing import testing_opt
-from misc.functions import *
+from utils.data_generation import *
+from utils.functions import *
 
-### Perform tests
 if __name__ == '__main__':
-  f, df = sphere_function()
-  testing_opt(f, df, n_dims=3, true_global_min= np.array(([0, 0, 0])))
+ 
 
   # Test Himmelblau function (medium complexity non-convex)
   # f, df = modified_schwefel()

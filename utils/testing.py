@@ -2,7 +2,7 @@ import inspect
 from SGD import *
 from datetime import datetime
 import os
-from globalVar import *
+from CONSTANTS import *
 from misc import *
 
 ### Test function

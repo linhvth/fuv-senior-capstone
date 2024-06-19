@@ -5,6 +5,8 @@ Linh Vu (2024)
 """
 
 ### IMPORT LIBRARIES
+import copy
+from math import sqrt
 import numpy as np
 
 class SGD:
@@ -16,8 +18,8 @@ class SGD:
     experimentation.
     """
 
-    def __init__(self, step_size=1e-2, max_iter=1000, n_streams=10, 
-                tolerance=1e-6):
+    def __init__(self, stepsize_schedule, step_size, max_iter=1000, 
+                 n_streams=30, tolerance=1e-6):
         """
         Initializes the SGD optimizer with default hyperparameters.
 
@@ -36,7 +38,11 @@ class SGD:
         self.n_dims = None          # no. dimensions
         self.Lipshitz_g = None      # Lipschitz constant of the NOISE VECTOR g(x, epsilon)
 
+        if stepsize_schedule not in ['fixed', 'decreasing']:
+            raise ValueError("stepsize_schedule must be either 'fixed' or 'decreasing'.")
+        self.stepsize_schedule = stepsize_schedule
         self.step_size = step_size  
+
         self.max_iter = max_iter
         self.tolerance = tolerance
         self.n_streams = n_streams
@@ -44,12 +50,14 @@ class SGD:
 
         # Noise Distribution - assumed to be Gaussian
         self.mu = 0             # init
-        self.noise_var = 1      # init value
+        self.noise_std = 1      # init value
         
         # Init to record result of iterations
         self.init_x = None
         self.x = None
         self.record_last_x = None
+        self.convergence_history_all_streams = dict()
+        self.convergence_history_average = None
 
     def update_hyperparams(self, **kwargs):
         """
@@ -74,14 +82,20 @@ class SGD:
                 setattr(self, key, value)
             
     
-    def _update(self, curr_x, stochastic_vec):
+    def _update(self, curr_x, stochastic_vec, step_size):
         """
         Performs a single update step of the SGD algorithm.
         """
         df_prev_x = self.df(curr_x)
-        updated_x = curr_x - self.step_size * (df_prev_x + stochastic_vec)
+        updated_x = curr_x - step_size * (df_prev_x + stochastic_vec)
         return updated_x
-
+    
+    def _stepsize_schedule_update(self, iter):
+        if self.stepsize_schedule == 'decreasing':
+            return copy.deepcopy(self.step_size) / sqrt(iter)
+        elif self.stepsize_schedule == 'fixed':
+            return self.step_size
+        
     def optimize(self, f, df, n_dims, init_point=None):
         """
         Optimizes the function using SGD for a maximum number of iterations.
@@ -105,26 +119,54 @@ class SGD:
         self.n_dims = n_dims
         self.init_x = init_point if init_point is not None else np.random.rand(self.n_dims)
 
+        ### Setup data record
+        self.record_last_x = np.zeros((self.n_streams, self.n_dims))
+        sum_all_streams = None
+
         ### Performs SGD update in each stream, then take the average of all final x values 
         ### obtained from whose streams.
-        self.record_last_x = np.zeros((self.n_streams, self.n_dims))
         for i in range(self.n_streams):
-            x = self.init_x.copy() # reset x to init_point for each stream
+            this_convergence_history = list()
+            x = copy.deepcopy(self.init_x) # reset x to init_point for each stream
 
-            for _ in range(self.max_iter):
+            for j in range(self.max_iter):
                 # Get a random vector
                 noise = self._gaussian_noise()
                 # Update theta
-                x = self._update(x, noise)
+                step_size = self._stepsize_schedule_update(j+1)
+                x = self._update(x, noise, step_size)
 
                 if (self.early_stopping) & (np.linalg.norm(self.df(x)) < self.tolerance):
                     break
 
+                # Record convergence history after each 10 iterations
+                this_convergence_history.append(x)
+                # if j % 5 == 0:
+                #     this_convergence_history.append(x)
+
             # Store values of lasts point of each stream
             self.record_last_x[i] = x
+
+            # Add convergece history of this stream to record
+            if i != 0:
+                sum_all_streams = [a + b for a, b in zip(sum_all_streams, this_convergence_history)]
+
+            else:
+                sum_all_streams = this_convergence_history
+
+            self.convergence_history_all_streams[f'k={i+1}'] = this_convergence_history
         
         # Average the last thetas of all streams to obtain the final 'optimal' theta
         self.x = np.mean(self.record_last_x, axis=0)
+
+        # Compute average data for convergence history
+        self.convergence_history_average = [arr / self.n_streams for arr in sum_all_streams]
+
+    def get_convergence_history_all_streams(self):
+        return self.convergence_history_all_streams
+    
+    def get_convergence_history_average(self):
+        return self.convergence_history_average
         
     def get_init_point(self):
         return self.init_x
@@ -135,13 +177,13 @@ class SGD:
     def get_solution(self):
         return self.x
     
-    def noise_gaussian_setup(self, mu=0, sigma_square=1) -> None:
+    def noise_gaussian_setup(self, mu=0, sigma=1) -> None:
         self.mu = mu
-        self.noise_var = sigma_square
+        self.noise_std = sigma
 
     def _gaussian_noise(self):
         return np.random.normal(loc=self.mu, 
-                                scale=self.noise_var, 
+                                scale=self.noise_std, 
                                 size=self.n_dims)
     
                        

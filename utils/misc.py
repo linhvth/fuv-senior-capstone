@@ -6,6 +6,7 @@ import os
 import datetime
 import numpy as np
 import pandas as pd
+import pickle
 
 def write_as_txt(results: dict, save_result_path: str) -> None:
     action = 'a' if os.path.exists(save_result_path) else 'w'
@@ -18,6 +19,12 @@ def write_as_txt(results: dict, save_result_path: str) -> None:
 def write_as_csv(result: pd.DataFrame, save_result_path: str) -> None:
     result.to_csv(save_result_path, index=False)
     return
+
+def write_to_pkl(results: dict, save_result_path: str) -> None:
+    # Save to pickle file (ensure data is picklable)
+    with open(save_result_path, 'wb') as f:
+        pickle.dump(results, f)
+
 
 def check_path_file(path):
     # Create the folder if it doesn't exist
